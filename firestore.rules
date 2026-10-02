@@ -1,0 +1,113 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function myRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isOfficerOrAdmin() {
+      return isSignedIn() && myRole() in ['officer', 'admin'];
+    }
+
+    function isAdmin() {
+      return isSignedIn() && myRole() == 'admin';
+    }
+
+    // ---- users ----
+    match /users/{uid} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ---- community forum ----
+    match /community_posts/{postId} {
+      allow read: if true;
+      allow create: if isSignedIn()
+                    && request.resource.data.title.size() < 200
+                    && request.resource.data.description.size() < 5000;
+      allow update: if isSignedIn(); // covers vote increments & accept-answer flag
+      allow delete: if isOwner(resource.data.authorId) || isAdmin();
+    }
+
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.content.size() < 3000;
+      allow update: if isSignedIn();
+      allow delete: if isOwner(resource.data.authorId) || isOfficerOrAdmin();
+    }
+
+    // ---- chat history: private to the owning user ----
+    match /chat_history/{docId} {
+      allow read, write: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // ---- rewards ledger: user can read own, only backend/admin should write in production ----
+    match /rewards/{docId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid || isAdmin();
+      allow create: if isSignedIn();
+    }
+
+    // ---- read-only reference data ----
+    match /government_schemes/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /knowledge_base/{docId} {
+      allow read: if true;
+      allow write: if isOfficerOrAdmin();
+    }
+
+    match /documents/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isOfficerOrAdmin();
+    }
+
+    match /weather_cache/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /notifications/{docId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow write: if isOfficerOrAdmin();
+    }
+
+    match /officers/{docId} {
+      allow read: if isOfficerOrAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /reports/{docId} {
+      allow read: if isOfficerOrAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if isOfficerOrAdmin();
+    }
+
+    // ---- questions / answers (legacy Q&A collections referenced in spec) ----
+    match /questions/{docId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update: if isOfficerOrAdmin() || isOwner(resource.data.authorId);
+    }
+
+    match /answers/{docId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update: if isOfficerOrAdmin() || isOwner(resource.data.authorId);
+    }
+  }
+}

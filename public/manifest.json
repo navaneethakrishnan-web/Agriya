@@ -1,0 +1,16 @@
+{
+  "name": "AGRIYA — Farmer Query Support & Advisory",
+  "short_name": "AGRIYA",
+  "description": "AI-based farmer query support and advisory system.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4efe3",
+  "theme_color": "#1f3d2b",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
